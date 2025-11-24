@@ -141,10 +141,10 @@ export default function AnimationPreview({ imageSrc }: AnimationPreviewProps) {
             const frames: ArrayBuffer[] = [];
             const delays: number[] = [];
 
-            // 設定: 2秒間のアニメーション、20fps (50ms/frame) -> 40フレーム
-            // LINEスタンプは最大4秒、容量制限300KBなので、フレーム数を抑えめにする
+            // 設定: 2秒間のアニメーション
+            // LINEスタンプは最大4秒、容量制限300KBなので、フレーム数と色数を抑える
             const duration = 2000; // 2秒
-            const fps = 15; // 15fps (容量削減のため少し落とす)
+            const fps = 10; // 10fps (容量削減のためフレームレートを下げる)
             const frameInterval = 1000 / fps;
             const totalFrames = Math.floor(duration / frameInterval);
 
@@ -158,8 +158,10 @@ export default function AnimationPreview({ imageSrc }: AnimationPreviewProps) {
                 delays.push(frameInterval);
             }
 
-            // APNGエンコード (cnum=0: フルカラー)
-            const apngBuffer = UPNG.encode(frames, CANVAS_WIDTH, CANVAS_HEIGHT, 0, delays);
+            // APNGエンコード
+            // cnum=256: 256色に減色して容量を削減（LINEスタンプ推奨）
+            // 0を指定するとフルカラーになり容量が大きくなる
+            const apngBuffer = UPNG.encode(frames, CANVAS_WIDTH, CANVAS_HEIGHT, 256, delays);
 
             // ダウンロード
             const blob = new Blob([apngBuffer], { type: "image/png" });
@@ -206,8 +208,8 @@ export default function AnimationPreview({ imageSrc }: AnimationPreviewProps) {
                             onClick={() => setAnimationType(type)}
                             disabled={isExporting}
                             className={`px-3 py-1.5 rounded text-sm font-medium capitalize transition-colors ${animationType === type
-                                    ? "bg-primary text-white"
-                                    : "bg-gray-800 text-gray-400 hover:bg-gray-700 disabled:opacity-50"
+                                ? "bg-primary text-white"
+                                : "bg-gray-800 text-gray-400 hover:bg-gray-700 disabled:opacity-50"
                                 }`}
                         >
                             {type}
