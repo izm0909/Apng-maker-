@@ -12,9 +12,9 @@ type AnimationType = "none" | "bounce" | "shake" | "pulse" | "swing";
 
 const PRESET_TEXTS = [
     "おはよ", "ありがとう", "OK", "おつかれ",
-    "おやすみ", "HAHA（爆笑）", "ふふふ…", "なんでやねん！",
-    "えらい！", "ごめんて", "それな！", "は？（ドン引き）",
-    "じーっ（凝視）", "既読", "らぶ", "ぺこり（謝罪）"
+    "おやすみ", "HAHA", "ふふふ…", "なんでやねん！",
+    "えらい！", "ごめんて", "それな！", "は？",
+    "じーっ", "既読", "らぶ", "ぺこり"
 ];
 
 export default function AnimationPreview({ imageSrc }: AnimationPreviewProps) {
