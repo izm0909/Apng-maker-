@@ -177,7 +177,7 @@ export default function AnimationPreview({ imageSrc }: AnimationPreviewProps) {
             // 設定: 2秒間のアニメーション
             // LINEスタンプは最大4秒、容量制限300KBなので、フレーム数と色数を抑える
             const duration = 2000; // 2秒
-            const fps = 10; // 10fps (容量削減のためフレームレートを下げる)
+            const fps = 8; // 8fps (容量削減のためフレームレートを下げる: 10 -> 8)
             const frameInterval = 1000 / fps;
             const totalFrames = Math.floor(duration / frameInterval);
 
@@ -192,9 +192,9 @@ export default function AnimationPreview({ imageSrc }: AnimationPreviewProps) {
             }
 
             // APNGエンコード
-            // cnum=256: 256色に減色して容量を削減（LINEスタンプ推奨）
-            // 0を指定するとフルカラーになり容量が大きくなる
-            const apngBuffer = UPNG.encode(frames, CANVAS_WIDTH, CANVAS_HEIGHT, 256, delays);
+            // cnum=128: 色数を128に減色して容量を削減（LINEスタンプ推奨は300KB以下）
+            // 256だと容量オーバーする場合があるため調整
+            const apngBuffer = UPNG.encode(frames, CANVAS_WIDTH, CANVAS_HEIGHT, 128, delays);
 
             // ダウンロード
             const blob = new Blob([apngBuffer], { type: "image/png" });
