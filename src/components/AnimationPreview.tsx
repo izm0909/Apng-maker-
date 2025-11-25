@@ -10,9 +10,17 @@ interface AnimationPreviewProps {
 
 type AnimationType = "none" | "bounce" | "shake" | "pulse" | "swing";
 
+const PRESET_TEXTS = [
+    "おはよ", "ありがとう", "OK", "おつかれ",
+    "おやすみ", "HAHA（爆笑）", "ふふふ…", "なんでやねん！",
+    "えらい！", "ごめんて", "それな！", "は？（ドン引き）",
+    "じーっ（凝視）", "既読", "らぶ", "ぺこり（謝罪）"
+];
+
 export default function AnimationPreview({ imageSrc }: AnimationPreviewProps) {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const [animationType, setAnimationType] = useState<AnimationType>("bounce");
+    const [text, setText] = useState<string>("");
     const requestRef = useRef<number | null>(null);
     const imageRef = useRef<HTMLImageElement | null>(null);
     const [isExporting, setIsExporting] = useState(false);
@@ -31,7 +39,7 @@ export default function AnimationPreview({ imageSrc }: AnimationPreviewProps) {
     }, [imageSrc]);
 
     // 描画ロジック（再利用のため関数化）
-    const drawFrame = (ctx: CanvasRenderingContext2D, img: HTMLImageElement, time: number, type: AnimationType) => {
+    const drawFrame = (ctx: CanvasRenderingContext2D, img: HTMLImageElement, time: number, type: AnimationType, text: string) => {
         // キャンバスをクリア
         ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
@@ -99,6 +107,31 @@ export default function AnimationPreview({ imageSrc }: AnimationPreviewProps) {
             );
         }
 
+        // テキスト描画
+        if (text) {
+            ctx.font = "bold 32px 'M PLUS Rounded 1c', sans-serif";
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            ctx.lineJoin = "round";
+            ctx.lineWidth = 6;
+
+            // テキストの位置（画像の下部、またはキャンバスの下部）
+            // ここでは画像の中心から少し下に配置してみる
+            // swingの場合は回転しているので座標系が異なるが、
+            // ここはシンプルに画像と一緒に動くように描画する
+            const textY = type === "swing" ? centerY + drawHeight / 2 - 20 : drawHeight / 2 + 40;
+            // swingのときは pivotY が centerY + drawHeight/2 なので、そこに近い位置
+
+            // 通常の描画位置（画像の下端付近）
+            // 画像の中心が(0,0) (swing以外)
+            const drawY = type === "swing" ? centerY : drawHeight / 2 - 10;
+
+            ctx.strokeStyle = "white";
+            ctx.strokeText(text, type === "swing" ? centerX : 0, drawY);
+            ctx.fillStyle = "#1e293b"; // Dark slate
+            ctx.fillText(text, type === "swing" ? centerX : 0, drawY);
+        }
+
         ctx.restore();
     };
 
@@ -109,7 +142,7 @@ export default function AnimationPreview({ imageSrc }: AnimationPreviewProps) {
         const img = imageRef.current;
 
         if (canvas && ctx && img && !isExporting) {
-            drawFrame(ctx, img, time, animationType);
+            drawFrame(ctx, img, time, animationType, text);
         }
 
         if (!isExporting) {
@@ -124,7 +157,7 @@ export default function AnimationPreview({ imageSrc }: AnimationPreviewProps) {
         return () => {
             if (requestRef.current) cancelAnimationFrame(requestRef.current);
         };
-    }, [animationType, isExporting]);
+    }, [animationType, isExporting, text]);
 
     const handleExport = async () => {
         if (!imageRef.current || !canvasRef.current) return;
@@ -150,7 +183,7 @@ export default function AnimationPreview({ imageSrc }: AnimationPreviewProps) {
 
             for (let i = 0; i < totalFrames; i++) {
                 const time = i * frameInterval;
-                drawFrame(ctx, imageRef.current, time, animationType);
+                drawFrame(ctx, imageRef.current, time, animationType, text);
 
                 // フレームデータを取得
                 const imageData = ctx.getImageData(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT).data.buffer;
@@ -215,6 +248,42 @@ export default function AnimationPreview({ imageSrc }: AnimationPreviewProps) {
                             {type}
                         </button>
                     ))}
+                </div>
+
+                {/* テキスト設定 */}
+                <div className="w-full space-y-3 p-4 bg-gray-800/50 rounded-lg border border-gray-700">
+                    <label className="text-sm font-medium text-gray-300">Add Text</label>
+                    <div className="flex gap-2">
+                        <input
+                            type="text"
+                            value={text}
+                            onChange={(e) => setText(e.target.value)}
+                            placeholder="Enter text..."
+                            className="flex-1 bg-gray-900 border border-gray-700 rounded px-3 py-2 text-white focus:outline-none focus:border-primary"
+                        />
+                        {text && (
+                            <button
+                                onClick={() => setText("")}
+                                className="px-3 py-2 bg-gray-700 text-gray-300 rounded hover:bg-gray-600"
+                            >
+                                Clear
+                            </button>
+                        )}
+                    </div>
+                    <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto custom-scrollbar">
+                        {PRESET_TEXTS.map((preset) => (
+                            <button
+                                key={preset}
+                                onClick={() => setText(preset)}
+                                className={`px-2 py-1 text-xs rounded border transition-colors ${text === preset
+                                    ? "bg-primary/20 border-primary text-primary"
+                                    : "bg-gray-800 border-gray-700 text-gray-400 hover:border-gray-500"
+                                    }`}
+                            >
+                                {preset}
+                            </button>
+                        ))}
+                    </div>
                 </div>
 
                 <button
