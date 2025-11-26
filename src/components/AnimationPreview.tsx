@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import UPNG from "upng-js";
 import { Download, Loader2 } from "lucide-react";
+import { setApngLoopCount } from "@/utils/apngUtils";
 
 interface AnimationPreviewProps {
     imageSrc: string;
@@ -21,6 +22,8 @@ export default function AnimationPreview({ imageSrc }: AnimationPreviewProps) {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const [animationType, setAnimationType] = useState<AnimationType>("bounce");
     const [text, setText] = useState<string>("");
+    const [loopCount, setLoopCount] = useState<number>(4); // Default to 4 for LINE stickers
+    const [duration, setDuration] = useState<number>(1000); // Default to 1s (to match 4 loops limit)
     const requestRef = useRef<number | null>(null);
     const imageRef = useRef<HTMLImageElement | null>(null);
     const [isExporting, setIsExporting] = useState(false);
@@ -28,6 +31,11 @@ export default function AnimationPreview({ imageSrc }: AnimationPreviewProps) {
     // LINEスタンプ最大サイズ
     const CANVAS_WIDTH = 320;
     const CANVAS_HEIGHT = 270;
+
+    // 合計再生時間の計算 (ms)
+    // ループ回数0（無限）の場合はWeb用なので制限なしとみなす（表示上は1ループ分を表示）
+    const totalDuration = loopCount === 0 ? duration : duration * loopCount;
+    const isLineCompliant = totalDuration <= 4000 && (totalDuration % 1000 === 0);
 
     // 画像のロード
     useEffect(() => {
@@ -174,9 +182,9 @@ export default function AnimationPreview({ imageSrc }: AnimationPreviewProps) {
             const frames: ArrayBuffer[] = [];
             const delays: number[] = [];
 
-            // 設定: 2秒間のアニメーション
+            // 設定: アニメーション
             // LINEスタンプは最大4秒、容量制限300KBなので、フレーム数と色数を抑える
-            const duration = 2000; // 2秒
+            // const duration = 2000; // stateを使用
             const fps = 8; // 8fps (容量削減のためフレームレートを下げる: 10 -> 8)
             const frameInterval = 1000 / fps;
             const totalFrames = Math.floor(duration / frameInterval);
@@ -194,14 +202,22 @@ export default function AnimationPreview({ imageSrc }: AnimationPreviewProps) {
             // APNGエンコード
             // cnum=128: 色数を128に減色して容量を削減（LINEスタンプ推奨は300KB以下）
             // 256だと容量オーバーする場合があるため調整
-            const apngBuffer = UPNG.encode(frames, CANVAS_WIDTH, CANVAS_HEIGHT, 128, delays);
+            let apngBuffer = UPNG.encode(frames, CANVAS_WIDTH, CANVAS_HEIGHT, 128, delays);
+
+            // ループ回数の設定を適用
+            // upng-jsはデフォルトで無限ループ(0)になるため、LINEスタンプ用に書き換える
+            if (loopCount !== 0) {
+                const result = setApngLoopCount(apngBuffer, loopCount);
+                apngBuffer = result.buffer;
+                console.log("APNG Patch Info:\n" + result.debugInfo);
+            }
 
             // ダウンロード
             const blob = new Blob([apngBuffer], { type: "image/png" });
             const url = URL.createObjectURL(blob);
             const a = document.createElement("a");
             a.href = url;
-            a.download = `sticker_${animationType}_${Date.now()}.png`;
+            a.download = `sticker_${animationType}_${duration / 1000}s_${Date.now()}.png`;
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
@@ -286,10 +302,41 @@ export default function AnimationPreview({ imageSrc }: AnimationPreviewProps) {
                     </div>
                 </div>
 
+                {/* 設定 (ループ回数 & 再生時間) */}
+                <div className="w-full grid grid-cols-2 gap-4">
+                    <div className="p-4 bg-gray-800/50 rounded-lg border border-gray-700 flex flex-col gap-2">
+                        <label className="text-sm font-medium text-gray-300">Loop Count</label>
+                        <select
+                            value={loopCount}
+                            onChange={(e) => setLoopCount(Number(e.target.value))}
+                            className="bg-gray-900 border border-gray-700 rounded px-3 py-1.5 text-white text-sm focus:outline-none focus:border-primary"
+                        >
+                            <option value={0}>Infinite (Web)</option>
+                            <option value={1}>1 Time (LINE)</option>
+                            <option value={2}>2 Times (LINE)</option>
+                            <option value={3}>3 Times (LINE)</option>
+                            <option value={4}>4 Times (LINE)</option>
+                        </select>
+                    </div>
+                    <div className="p-4 bg-gray-800/50 rounded-lg border border-gray-700 flex flex-col gap-2">
+                        <label className="text-sm font-medium text-gray-300">Duration</label>
+                        <select
+                            value={duration}
+                            onChange={(e) => setDuration(Number(e.target.value))}
+                            className="bg-gray-900 border border-gray-700 rounded px-3 py-1.5 text-white text-sm focus:outline-none focus:border-primary"
+                        >
+                            <option value={1000}>1 Second</option>
+                            <option value={2000}>2 Seconds</option>
+                            <option value={3000}>3 Seconds</option>
+                            <option value={4000}>4 Seconds</option>
+                        </select>
+                    </div>
+                </div>
+
                 <button
                     onClick={handleExport}
-                    disabled={isExporting || animationType === "none"}
-                    className="btn btn-primary w-full max-w-xs"
+                    disabled={isExporting || animationType === "none" || (loopCount !== 0 && !isLineCompliant)}
+                    className={`btn w-full max-w-xs ${loopCount !== 0 && !isLineCompliant ? "btn-error" : "btn-primary"}`}
                 >
                     {isExporting ? (
                         <>
@@ -299,13 +346,19 @@ export default function AnimationPreview({ imageSrc }: AnimationPreviewProps) {
                     ) : (
                         <>
                             <Download size={18} />
-                            Export APNG
+                            {loopCount !== 0 && !isLineCompliant ? "Total Duration > 4s" : "Export APNG"}
                         </>
                     )}
                 </button>
-                <p className="text-xs text-gray-500">
-                    Size: 320x270px • Length: 2s • Format: APNG
-                </p>
+                <div className="text-xs text-center space-y-1">
+                    <p className="text-gray-500">
+                        Size: 320x270px • Format: APNG
+                    </p>
+                    <p className={`${isLineCompliant ? "text-green-500" : "text-red-500"} font-medium`}>
+                        Total Duration: {totalDuration / 1000}s
+                        {loopCount !== 0 && !isLineCompliant && " (Must be ≤ 4s for LINE)"}
+                    </p>
+                </div>
             </div>
         </div>
     );
