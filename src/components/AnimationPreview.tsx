@@ -47,7 +47,7 @@ export default function AnimationPreview({ imageSrc }: AnimationPreviewProps) {
     }, [imageSrc]);
 
     // 描画ロジック（再利用のため関数化）
-    const drawFrame = (ctx: CanvasRenderingContext2D, img: HTMLImageElement, time: number, type: AnimationType, text: string) => {
+    const drawFrame = (ctx: CanvasRenderingContext2D, img: HTMLImageElement, time: number, type: AnimationType, text: string, duration: number) => {
         // キャンバスをクリア
         ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
@@ -57,18 +57,29 @@ export default function AnimationPreview({ imageSrc }: AnimationPreviewProps) {
         let scale = 1;
         let rotation = 0; // ラジアン
 
+        // 周期関数 (0 -> 1)
+        // time が duration の倍数のときにちょうど0に戻るようにする
+        const t = (time % duration) / duration;
+        const rad = t * Math.PI * 2;
+
         switch (type) {
             case "bounce":
-                offsetY = Math.sin(time / 200) * 20;
+                // 1ループで2回跳ねる
+                offsetY = Math.sin(rad * 2) * 20;
+                // 跳ねる動きっぽくするために絶対値をとって反転させるなどの工夫もできるが、
+                // ここではシンプルなサイン波で上下動させる
                 break;
             case "shake":
-                offsetX = Math.sin(time / 100) * 10;
+                // 1ループで4回震える
+                offsetX = Math.sin(rad * 4) * 10;
                 break;
             case "pulse":
-                scale = 1 + Math.sin(time / 300) * 0.1;
+                // 1ループで1回拡大縮小
+                scale = 1 + Math.sin(rad) * 0.1;
                 break;
             case "swing":
-                rotation = Math.sin(time / 400) * 0.2;
+                // 1ループで1回揺れる (左右対称)
+                rotation = Math.sin(rad) * 0.2;
                 break;
             case "none":
             default:
@@ -86,34 +97,27 @@ export default function AnimationPreview({ imageSrc }: AnimationPreviewProps) {
 
         ctx.save();
 
-        if (type === "swing") {
-            const pivotX = centerX;
-            const pivotY = centerY + drawHeight / 2;
+        // 基本位置へ移動 (中心 + アニメーションのオフセット)
+        ctx.translate(centerX + offsetX, centerY + offsetY);
 
-            ctx.translate(pivotX, pivotY);
+        // swing用の回転処理
+        if (type === "swing") {
+            // 回転軸を画像の下端に設定
+            // 現在位置(0, 0)は画像の中心なので、そこから drawHeight/2 下にずらす
+            const pivotOffset = drawHeight / 2;
+            ctx.translate(0, pivotOffset);
             ctx.rotate(rotation);
-            ctx.translate(-pivotX, -pivotY);
-        } else {
-            ctx.translate(centerX + offsetX, centerY + offsetY);
+            ctx.translate(0, -pivotOffset);
         }
 
-        if (type === "swing") {
-            ctx.drawImage(
-                img,
-                centerX - drawWidth / 2,
-                centerY - drawHeight / 2,
-                drawWidth,
-                drawHeight
-            );
-        } else {
-            ctx.drawImage(
-                img,
-                -drawWidth / 2,
-                -drawHeight / 2,
-                drawWidth,
-                drawHeight
-            );
-        }
+        // 画像描画 (常に中心基準)
+        ctx.drawImage(
+            img,
+            -drawWidth / 2,
+            -drawHeight / 2,
+            drawWidth,
+            drawHeight
+        );
 
         // テキスト描画
         if (text) {
@@ -123,21 +127,15 @@ export default function AnimationPreview({ imageSrc }: AnimationPreviewProps) {
             ctx.lineJoin = "round";
             ctx.lineWidth = 6;
 
-            // テキストの位置（画像の下部、またはキャンバスの下部）
-            // ここでは画像の中心から少し下に配置してみる
-            // swingの場合は回転しているので座標系が異なるが、
-            // ここはシンプルに画像と一緒に動くように描画する
-            const textY = type === "swing" ? centerY + drawHeight / 2 - 20 : drawHeight / 2 + 40;
-            // swingのときは pivotY が centerY + drawHeight/2 なので、そこに近い位置
-
-            // 通常の描画位置（画像の下端付近）
-            // 画像の中心が(0,0) (swing以外)
-            const drawY = type === "swing" ? centerY : drawHeight / 2 - 10;
+            // テキストの位置（画像の下部）
+            // 画像と一緒に動くので、単純にY座標を指定すればよい
+            // 画像の下端より少し上に配置
+            const textY = drawHeight / 2 - 20;
 
             ctx.strokeStyle = "white";
-            ctx.strokeText(text, type === "swing" ? centerX : 0, drawY);
+            ctx.strokeText(text, 0, textY);
             ctx.fillStyle = "#1e293b"; // Dark slate
-            ctx.fillText(text, type === "swing" ? centerX : 0, drawY);
+            ctx.fillText(text, 0, textY);
         }
 
         ctx.restore();
@@ -150,7 +148,7 @@ export default function AnimationPreview({ imageSrc }: AnimationPreviewProps) {
         const img = imageRef.current;
 
         if (canvas && ctx && img && !isExporting) {
-            drawFrame(ctx, img, time, animationType, text);
+            drawFrame(ctx, img, time, animationType, text, duration);
         }
 
         if (!isExporting) {
@@ -165,7 +163,7 @@ export default function AnimationPreview({ imageSrc }: AnimationPreviewProps) {
         return () => {
             if (requestRef.current) cancelAnimationFrame(requestRef.current);
         };
-    }, [animationType, isExporting, text]);
+    }, [animationType, isExporting, text, duration]);
 
     const handleExport = async () => {
         if (!imageRef.current || !canvasRef.current) return;
@@ -191,7 +189,7 @@ export default function AnimationPreview({ imageSrc }: AnimationPreviewProps) {
 
             for (let i = 0; i < totalFrames; i++) {
                 const time = i * frameInterval;
-                drawFrame(ctx, imageRef.current, time, animationType, text);
+                drawFrame(ctx, imageRef.current, time, animationType, text, duration);
 
                 // フレームデータを取得
                 const imageData = ctx.getImageData(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT).data.buffer;
