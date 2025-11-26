@@ -37,12 +37,44 @@ export default function AnimationPreview({ imageSrc }: AnimationPreviewProps) {
     const totalDuration = loopCount === 0 ? duration : duration * loopCount;
     const isLineCompliant = totalDuration <= 4000 && (totalDuration % 1000 === 0);
 
-    // 画像のロード
+    // 画像のロードとクリーンアップ（透過漏れ対策）
     useEffect(() => {
         const img = new Image();
         img.src = imageSrc;
         img.onload = () => {
-            imageRef.current = img;
+            // オフスクリーンキャンバスでアルファ値のクリーンアップを行う
+            const canvas = document.createElement("canvas");
+            canvas.width = img.width;
+            canvas.height = img.height;
+            const ctx = canvas.getContext("2d");
+
+            if (ctx) {
+                ctx.drawImage(img, 0, 0);
+                const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                const data = imageData.data;
+
+                // アルファ値の閾値処理
+                // LINEスタンプのリジェクト対策：半透明のゴミ（透過漏れ）を完全に消去する
+                // アルファ値が 50 (約20%) 未満のピクセルを完全に透明にする
+                const threshold = 50;
+
+                for (let i = 0; i < data.length; i += 4) {
+                    if (data[i + 3] < threshold) {
+                        data[i + 3] = 0;
+                    }
+                }
+
+                ctx.putImageData(imageData, 0, 0);
+
+                // 加工済みの画像をセット
+                const cleanedImg = new Image();
+                cleanedImg.src = canvas.toDataURL();
+                cleanedImg.onload = () => {
+                    imageRef.current = cleanedImg;
+                };
+            } else {
+                imageRef.current = img;
+            }
         };
     }, [imageSrc]);
 
