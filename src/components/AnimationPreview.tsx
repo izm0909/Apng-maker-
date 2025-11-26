@@ -219,8 +219,8 @@ export default function AnimationPreview({ imageSrc }: AnimationPreviewProps) {
 
     return (
         <div className="flex flex-col gap-6 w-full items-center">
-            {/* 表示サイズを50% (max-w-[50%]) に制限 */}
-            <div className="aspect-[320/270] w-full max-w-[50%] bg-checker rounded-lg overflow-hidden border border-gray-800 relative shadow-lg">
+            {/* 表示サイズをレスポンシブに調整 */}
+            <div className="aspect-[320/270] w-full md:max-w-[60%] lg:max-w-[50%] bg-checker rounded-lg overflow-hidden border border-gray-800 relative shadow-lg">
                 <canvas
                     ref={canvasRef}
                     width={CANVAS_WIDTH}
@@ -236,13 +236,13 @@ export default function AnimationPreview({ imageSrc }: AnimationPreviewProps) {
             </div>
 
             <div className="flex flex-col gap-4 w-full items-center">
-                <div className="flex gap-2 justify-center flex-wrap">
+                <div className="grid grid-cols-3 sm:grid-cols-5 gap-2 w-full">
                     {(["none", "bounce", "shake", "pulse", "swing"] as AnimationType[]).map((type) => (
                         <button
                             key={type}
                             onClick={() => setAnimationType(type)}
                             disabled={isExporting}
-                            className={`px-3 py-1.5 rounded text-sm font-medium capitalize transition-colors ${animationType === type
+                            className={`py-3 rounded text-sm font-medium capitalize transition-colors ${animationType === type
                                 ? "bg-primary text-white"
                                 : "bg-gray-800 text-gray-400 hover:bg-gray-700 disabled:opacity-50"
                                 }`}
@@ -277,7 +277,7 @@ export default function AnimationPreview({ imageSrc }: AnimationPreviewProps) {
                             <button
                                 key={preset}
                                 onClick={() => setText(preset)}
-                                className={`px-2 py-1 text-xs rounded border transition-colors ${text === preset
+                                className={`px-3 py-2 text-sm rounded border transition-colors ${text === preset
                                     ? "bg-primary/20 border-primary text-primary"
                                     : "bg-gray-800 border-gray-700 text-gray-400 hover:border-gray-500"
                                     }`}
@@ -319,7 +319,7 @@ export default function AnimationPreview({ imageSrc }: AnimationPreviewProps) {
                     </div>
                 </div>
 
-                <div className="flex flex-col gap-2 w-full max-w-xs">
+                <div className="flex flex-col gap-3 w-full">
                     <button
                         onClick={() => handleExport(CANVAS_WIDTH, CANVAS_HEIGHT, false)}
                         disabled={isExporting || animationType === "none" || (loopCount !== 0 && !isLineCompliant)}

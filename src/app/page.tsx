@@ -123,7 +123,7 @@ export default function Home() {
                 <div className="card bg-black/20 p-6 flex flex-col gap-4">
                   <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wider">Background Removal</h3>
 
-                  <div className="grid grid-cols-2 gap-4 items-center">
+                  <div className="grid grid-cols-1 md:grid-cols-[1fr_auto_1fr] gap-4 items-center">
                     {/* Original */}
                     <div className="space-y-2">
                       <div className="aspect-square rounded-lg overflow-hidden border border-gray-800 bg-gray-900/50 relative">
@@ -134,7 +134,7 @@ export default function Home() {
                     </div>
 
                     {/* Arrow */}
-                    <div className="flex justify-center text-gray-600">
+                    <div className="flex justify-center text-gray-600 rotate-90 md:rotate-0">
                       {isProcessing ? <Loader2 className="animate-spin" /> : <ArrowRight />}
                     </div>
 
