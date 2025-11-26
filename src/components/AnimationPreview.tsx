@@ -47,9 +47,9 @@ export default function AnimationPreview({ imageSrc }: AnimationPreviewProps) {
     }, [imageSrc]);
 
     // 描画ロジック（再利用のため関数化）
-    const drawFrame = (ctx: CanvasRenderingContext2D, img: HTMLImageElement, time: number, type: AnimationType, text: string, duration: number) => {
+    const drawFrame = (ctx: CanvasRenderingContext2D, img: HTMLImageElement, time: number, type: AnimationType, text: string, duration: number, width: number, height: number) => {
         // キャンバスをクリア
-        ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+        ctx.clearRect(0, 0, width, height);
 
         // アニメーションパラメータの計算
         let offsetX = 0;
@@ -58,27 +58,20 @@ export default function AnimationPreview({ imageSrc }: AnimationPreviewProps) {
         let rotation = 0; // ラジアン
 
         // 周期関数 (0 -> 1)
-        // time が duration の倍数のときにちょうど0に戻るようにする
         const t = (time % duration) / duration;
         const rad = t * Math.PI * 2;
 
         switch (type) {
             case "bounce":
-                // 1ループで2回跳ねる
                 offsetY = Math.sin(rad * 2) * 20;
-                // 跳ねる動きっぽくするために絶対値をとって反転させるなどの工夫もできるが、
-                // ここではシンプルなサイン波で上下動させる
                 break;
             case "shake":
-                // 1ループで4回震える
                 offsetX = Math.sin(rad * 4) * 10;
                 break;
             case "pulse":
-                // 1ループで1回拡大縮小
                 scale = 1 + Math.sin(rad) * 0.1;
                 break;
             case "swing":
-                // 1ループで1回揺れる (左右対称)
                 rotation = Math.sin(rad) * 0.2;
                 break;
             case "none":
@@ -86,31 +79,29 @@ export default function AnimationPreview({ imageSrc }: AnimationPreviewProps) {
                 break;
         }
 
-        const centerX = CANVAS_WIDTH / 2;
-        const centerY = CANVAS_HEIGHT / 2;
+        const centerX = width / 2;
+        const centerY = height / 2;
 
         // 画像のアスペクト比を維持して描画サイズを決定
-        const maxSize = Math.min(CANVAS_WIDTH, CANVAS_HEIGHT) * 0.8;
+        const maxSize = Math.min(width, height) * 0.8;
         const ratio = Math.min(maxSize / img.width, maxSize / img.height);
         const drawWidth = img.width * ratio * scale;
         const drawHeight = img.height * ratio * scale;
 
         ctx.save();
 
-        // 基本位置へ移動 (中心 + アニメーションのオフセット)
+        // 基本位置へ移動
         ctx.translate(centerX + offsetX, centerY + offsetY);
 
         // swing用の回転処理
         if (type === "swing") {
-            // 回転軸を画像の下端に設定
-            // 現在位置(0, 0)は画像の中心なので、そこから drawHeight/2 下にずらす
             const pivotOffset = drawHeight / 2;
             ctx.translate(0, pivotOffset);
             ctx.rotate(rotation);
             ctx.translate(0, -pivotOffset);
         }
 
-        // 画像描画 (常に中心基準)
+        // 画像描画
         ctx.drawImage(
             img,
             -drawWidth / 2,
@@ -121,16 +112,15 @@ export default function AnimationPreview({ imageSrc }: AnimationPreviewProps) {
 
         // テキスト描画
         if (text) {
-            ctx.font = "bold 32px 'M PLUS Rounded 1c', sans-serif";
+            // フォントサイズもキャンバスサイズに合わせて調整（基準320pxに対して32px）
+            const fontSize = Math.round(32 * (width / 320));
+            ctx.font = `bold ${fontSize}px 'M PLUS Rounded 1c', sans-serif`;
             ctx.textAlign = "center";
             ctx.textBaseline = "middle";
             ctx.lineJoin = "round";
-            ctx.lineWidth = 6;
+            ctx.lineWidth = Math.max(2, 6 * (width / 320));
 
-            // テキストの位置（画像の下部）
-            // 画像と一緒に動くので、単純にY座標を指定すればよい
-            // 画像の下端より少し上に配置
-            const textY = drawHeight / 2 - 20;
+            const textY = drawHeight / 2 - (20 * (width / 320));
 
             ctx.strokeStyle = "white";
             ctx.strokeText(text, 0, textY);
@@ -148,7 +138,7 @@ export default function AnimationPreview({ imageSrc }: AnimationPreviewProps) {
         const img = imageRef.current;
 
         if (canvas && ctx && img && !isExporting) {
-            drawFrame(ctx, img, time, animationType, text, duration);
+            drawFrame(ctx, img, time, animationType, text, duration, CANVAS_WIDTH, CANVAS_HEIGHT);
         }
 
         if (!isExporting) {
@@ -165,45 +155,42 @@ export default function AnimationPreview({ imageSrc }: AnimationPreviewProps) {
         };
     }, [animationType, isExporting, text, duration]);
 
-    const handleExport = async () => {
-        if (!imageRef.current || !canvasRef.current) return;
+    const handleExport = async (targetWidth: number = CANVAS_WIDTH, targetHeight: number = CANVAS_HEIGHT, isMain: boolean = false) => {
+        if (!imageRef.current) return;
         setIsExporting(true);
 
         // 少し待ってUI更新を反映させる
         await new Promise(resolve => setTimeout(resolve, 100));
 
         try {
-            const canvas = canvasRef.current;
+            // オフスクリーンキャンバス（または一時キャンバス）を作成
+            const canvas = document.createElement("canvas");
+            canvas.width = targetWidth;
+            canvas.height = targetHeight;
             const ctx = canvas.getContext("2d");
             if (!ctx) throw new Error("No context");
 
             const frames: ArrayBuffer[] = [];
             const delays: number[] = [];
 
-            // 設定: アニメーション
-            // LINEスタンプは最大4秒、容量制限300KBなので、フレーム数と色数を抑える
-            // const duration = 2000; // stateを使用
-            const fps = 8; // 8fps (容量削減のためフレームレートを下げる: 10 -> 8)
+            const fps = 8;
             const frameInterval = 1000 / fps;
             const totalFrames = Math.floor(duration / frameInterval);
 
             for (let i = 0; i < totalFrames; i++) {
                 const time = i * frameInterval;
-                drawFrame(ctx, imageRef.current, time, animationType, text, duration);
+                drawFrame(ctx, imageRef.current, time, animationType, text, duration, targetWidth, targetHeight);
 
                 // フレームデータを取得
-                const imageData = ctx.getImageData(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT).data.buffer;
+                const imageData = ctx.getImageData(0, 0, targetWidth, targetHeight).data.buffer;
                 frames.push(imageData);
                 delays.push(frameInterval);
             }
 
             // APNGエンコード
-            // cnum=128: 色数を128に減色して容量を削減（LINEスタンプ推奨は300KB以下）
-            // 256だと容量オーバーする場合があるため調整
-            let apngBuffer = UPNG.encode(frames, CANVAS_WIDTH, CANVAS_HEIGHT, 128, delays);
+            let apngBuffer = UPNG.encode(frames, targetWidth, targetHeight, 128, delays);
 
             // ループ回数の設定を適用
-            // upng-jsはデフォルトで無限ループ(0)になるため、LINEスタンプ用に書き換える
             if (loopCount !== 0) {
                 const result = setApngLoopCount(apngBuffer, loopCount);
                 apngBuffer = result.buffer;
@@ -215,7 +202,8 @@ export default function AnimationPreview({ imageSrc }: AnimationPreviewProps) {
             const url = URL.createObjectURL(blob);
             const a = document.createElement("a");
             a.href = url;
-            a.download = `sticker_${animationType}_${duration / 1000}s_${Date.now()}.png`;
+            const prefix = isMain ? "main" : "sticker";
+            a.download = `${prefix}_${animationType}_${Date.now()}.png`;
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
@@ -331,26 +319,47 @@ export default function AnimationPreview({ imageSrc }: AnimationPreviewProps) {
                     </div>
                 </div>
 
-                <button
-                    onClick={handleExport}
-                    disabled={isExporting || animationType === "none" || (loopCount !== 0 && !isLineCompliant)}
-                    className={`btn w-full max-w-xs ${loopCount !== 0 && !isLineCompliant ? "btn-error" : "btn-primary"}`}
-                >
-                    {isExporting ? (
-                        <>
-                            <Loader2 className="animate-spin" size={18} />
-                            Exporting...
-                        </>
-                    ) : (
-                        <>
-                            <Download size={18} />
-                            {loopCount !== 0 && !isLineCompliant ? "Total Duration > 4s" : "Export APNG"}
-                        </>
-                    )}
-                </button>
+                <div className="flex flex-col gap-2 w-full max-w-xs">
+                    <button
+                        onClick={() => handleExport(CANVAS_WIDTH, CANVAS_HEIGHT, false)}
+                        disabled={isExporting || animationType === "none" || (loopCount !== 0 && !isLineCompliant)}
+                        className={`btn w-full ${loopCount !== 0 && !isLineCompliant ? "btn-error" : "btn-primary"}`}
+                    >
+                        {isExporting ? (
+                            <>
+                                <Loader2 className="animate-spin" size={18} />
+                                Exporting...
+                            </>
+                        ) : (
+                            <>
+                                <Download size={18} />
+                                {loopCount !== 0 && !isLineCompliant ? "Total Duration > 4s" : "Export Sticker (320x270)"}
+                            </>
+                        )}
+                    </button>
+
+                    <button
+                        onClick={() => handleExport(240, 240, true)}
+                        disabled={isExporting || animationType === "none" || (loopCount !== 0 && !isLineCompliant)}
+                        className={`btn w-full btn-outline ${loopCount !== 0 && !isLineCompliant ? "btn-error" : "border-gray-600 text-gray-300 hover:bg-gray-800"}`}
+                    >
+                        {isExporting ? (
+                            <>
+                                <Loader2 className="animate-spin" size={18} />
+                                Exporting...
+                            </>
+                        ) : (
+                            <>
+                                <Download size={18} />
+                                Export Main (240x240)
+                            </>
+                        )}
+                    </button>
+                </div>
+
                 <div className="text-xs text-center space-y-1">
                     <p className="text-gray-500">
-                        Size: 320x270px • Format: APNG
+                        Format: APNG
                     </p>
                     <p className={`${isLineCompliant ? "text-green-500" : "text-red-500"} font-medium`}>
                         Total Duration: {totalDuration / 1000}s
