@@ -253,9 +253,20 @@ export default function AnimationPreview({ imageSrc }: AnimationPreviewProps) {
                 delays.push(frameInterval);
             }
 
-            // APNGエンコード
-            // cnum: 0 (lossless) に設定して、減色による透過ノイズ（透過漏れの原因）を防ぐ
-            let apngBuffer = UPNG.encode(frames, targetWidth, targetHeight, 0, delays);
+            // APNGエンコード (容量制限 300KB 対策)
+            // LINEスタンプの制限: 1個あたり300KB以下
+            // まずは画質優先(256色)で試行し、300KBを超える場合は色数を減らして再試行する
+            let cnum = 256;
+            let apngBuffer = UPNG.encode(frames, targetWidth, targetHeight, cnum, delays);
+
+            while (apngBuffer.byteLength > 300 * 1024 && cnum >= 16) {
+                // 300KBを超えている場合、色数を減らしてリトライ
+                cnum = Math.floor(cnum / 2);
+                console.log(`File size ${(apngBuffer.byteLength / 1024).toFixed(2)}KB > 300KB. Retrying with ${cnum} colors...`);
+                apngBuffer = UPNG.encode(frames, targetWidth, targetHeight, cnum, delays);
+            }
+
+            console.log(`Final APNG size: ${(apngBuffer.byteLength / 1024).toFixed(2)}KB (Colors: ${cnum})`);
 
             // ループ回数の設定を適用
             if (loopCount !== 0) {
