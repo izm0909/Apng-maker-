@@ -56,19 +56,45 @@ export default function AnimationPreview({ imageSrc }: AnimationPreviewProps) {
                 // アルファ値の閾値処理
                 // LINEスタンプのリジェクト対策：半透明のゴミ（透過漏れ）を完全に消去する
                 // アルファ値が 50 (約20%) 未満のピクセルを完全に透明にする
-                // アルファ値の閾値処理
-                // LINEスタンプのリジェクト対策：半透明のゴミ（透過漏れ）を完全に消去する
-                // 1. ゴミ除去: アルファ値が 60 未満のピクセルを完全に透明にする
-                // 2. 透過漏れ防止: アルファ値が 230 以上のピクセルを完全に不透明にする（半透明の縁をなくす）
-                const thresholdLow = 60;
-                const thresholdHigh = 230;
+                // アルファ値の閾値処理 & エッジ収縮（Erosion）
+                // LINEスタンプのリジェクト対策：
+                // 1. 半透明のゴミを消去
+                // 2. 「白いフリンジ（縁取り）」を消すために、輪郭を1ピクセル内側に削る
 
-                for (let i = 0; i < data.length; i += 4) {
-                    const alpha = data[i + 3];
-                    if (alpha < thresholdLow) {
-                        data[i + 3] = 0;
-                    } else if (alpha > thresholdHigh) {
-                        data[i + 3] = 255;
+                const width = canvas.width;
+                const height = canvas.height;
+                const threshold = 60; // ゴミとみなす閾値
+
+                // 処理前のデータをコピー（参照用）
+                const originalData = new Uint8ClampedArray(data);
+
+                for (let y = 0; y < height; y++) {
+                    for (let x = 0; x < width; x++) {
+                        const idx = (y * width + x) * 4;
+
+                        // 1. ゴミ除去: もともと薄い部分は消す
+                        if (originalData[idx + 3] < threshold) {
+                            data[idx + 3] = 0;
+                            continue;
+                        }
+
+                        // 2. エッジ収縮: 周囲4近傍のいずれかが透明（閾値以下）なら、自分も消す
+                        // これにより、背景削除で残りやすい境界線の白いノイズを削り取る
+                        let isEdge = false;
+
+                        // 左
+                        if (x > 0 && originalData[idx - 4 + 3] < threshold) isEdge = true;
+                        // 右
+                        else if (x < width - 1 && originalData[idx + 4 + 3] < threshold) isEdge = true;
+                        // 上
+                        else if (y > 0 && originalData[idx - width * 4 + 3] < threshold) isEdge = true;
+                        // 下
+                        else if (y < height - 1 && originalData[idx + width * 4 + 3] < threshold) isEdge = true;
+
+                        if (isEdge) {
+                            // エッジ部分は透明にする（白いフリンジ対策）
+                            data[idx + 3] = 0;
+                        }
                     }
                 }
 
