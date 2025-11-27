@@ -56,11 +56,19 @@ export default function AnimationPreview({ imageSrc }: AnimationPreviewProps) {
                 // アルファ値の閾値処理
                 // LINEスタンプのリジェクト対策：半透明のゴミ（透過漏れ）を完全に消去する
                 // アルファ値が 50 (約20%) 未満のピクセルを完全に透明にする
-                const threshold = 50;
+                // アルファ値の閾値処理
+                // LINEスタンプのリジェクト対策：半透明のゴミ（透過漏れ）を完全に消去する
+                // 1. ゴミ除去: アルファ値が 60 未満のピクセルを完全に透明にする
+                // 2. 透過漏れ防止: アルファ値が 230 以上のピクセルを完全に不透明にする（半透明の縁をなくす）
+                const thresholdLow = 60;
+                const thresholdHigh = 230;
 
                 for (let i = 0; i < data.length; i += 4) {
-                    if (data[i + 3] < threshold) {
+                    const alpha = data[i + 3];
+                    if (alpha < thresholdLow) {
                         data[i + 3] = 0;
+                    } else if (alpha > thresholdHigh) {
+                        data[i + 3] = 255;
                     }
                 }
 
@@ -220,7 +228,8 @@ export default function AnimationPreview({ imageSrc }: AnimationPreviewProps) {
             }
 
             // APNGエンコード
-            let apngBuffer = UPNG.encode(frames, targetWidth, targetHeight, 128, delays);
+            // cnum: 0 (lossless) に設定して、減色による透過ノイズ（透過漏れの原因）を防ぐ
+            let apngBuffer = UPNG.encode(frames, targetWidth, targetHeight, 0, delays);
 
             // ループ回数の設定を適用
             if (loopCount !== 0) {
