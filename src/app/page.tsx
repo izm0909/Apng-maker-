@@ -12,6 +12,8 @@ export default function Home() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const [isBgRemovalEnabled, setIsBgRemovalEnabled] = useState(true);
+
   // クリーンアップ
   useEffect(() => {
     return () => {
@@ -30,18 +32,26 @@ export default function Home() {
     setProcessedImage(null);
 
     try {
-      console.log("Starting background removal...");
-      // 背景削除処理
-      // note: 初回実行時はアセットのダウンロードに時間がかかる場合があります
-      const blob = await removeBackground(file, {
-        progress: (key: string, current: number, total: number) => {
-          console.log(`Progress: ${key} ${current}/${total}`);
-        }
-      });
+      if (isBgRemovalEnabled) {
+        console.log("Starting background removal...");
+        // 背景削除処理
+        // note: 初回実行時はアセットのダウンロードに時間がかかる場合があります
+        const blob = await removeBackground(file, {
+          progress: (key: string, current: number, total: number) => {
+            console.log(`Progress: ${key} ${current}/${total}`);
+          }
+        });
 
-      const processedUrl = URL.createObjectURL(blob);
-      setProcessedImage(processedUrl);
-      console.log("Background removal complete!");
+        const processedUrl = URL.createObjectURL(blob);
+        setProcessedImage(processedUrl);
+        console.log("Background removal complete!");
+      } else {
+        // 背景削除をスキップ（そのまま使用）
+        // fileをそのまま使うか、objectUrlを使う
+        // ここでは一貫性のためobjectUrlを使用（ただし、AnimationPreview側でCORSエラーが出ないように注意が必要だが、
+        // createObjectURLで作ったURLは同一オリジン扱いになるので基本OK）
+        setProcessedImage(objectUrl);
+      }
     } catch (err) {
       console.error("Background removal failed:", err);
       setError("Failed to remove background. Please try again.");
@@ -88,6 +98,18 @@ export default function Home() {
                 Upload a single image, remove the background automatically, and add motion to create LINE animated stickers.
               </p>
             </div>
+            <div className="flex items-center gap-3 bg-gray-800/50 px-4 py-2 rounded-full border border-gray-700 mb-4">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={isBgRemovalEnabled}
+                  onChange={(e) => setIsBgRemovalEnabled(e.target.checked)}
+                  className="toggle toggle-primary toggle-sm"
+                />
+                <span className="text-sm font-medium text-gray-300">Auto Background Removal</span>
+              </label>
+            </div>
+
             <ImageUploader onImageSelected={handleImageSelected} isProcessing={isProcessing} />
 
             {/* Features Grid */}
